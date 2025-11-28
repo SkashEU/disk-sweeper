@@ -1,3 +1,9 @@
+# Disk Sweeper
+
+A cross-platform disk inspection and cleanup tool. Disk Sweeper scans storage, identifies large, old, or redundant files and folders, and helps users safely reclaim disk space through a responsive multi-platform UI.
+
+Ill write this later
+
 This is a Kotlin Multiplatform project targeting Desktop (JVM).
 
 * [/composeApp](./composeApp/src) is for code that will be shared across your Compose Multiplatform applications.
