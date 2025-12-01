@@ -247,9 +247,12 @@ private fun ScanDetailCard(title: String, value: String) {
 }
 
 fun formatSize(bytes: Long): String {
-    val kb = 1024.0
-    val mb = kb * 1024
-    val gb = mb * 1024
+    //TODO We move this somehwere else ofc and abstracting the diffrence of the systems away
+    val isMac = System.getProperty("os.name")?.lowercase()?.contains("mac") == true
+    val base = if (isMac) 1000.0 else 1024.0
+    val kb = base
+    val mb = kb * base
+    val gb = mb * base
     return when {
         bytes >= gb -> String.format("%.2f GB", bytes / gb)
         bytes >= mb -> String.format("%.1f MB", bytes / mb)
