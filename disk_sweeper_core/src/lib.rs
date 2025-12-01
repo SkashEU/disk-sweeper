@@ -85,6 +85,7 @@ fn run_reporter_loop(env: &mut JNIEnv, listener: &JObject, state: &Arc<ScanState
 
     let mut last_bytes = 0u64;
     let mut last_time = std::time::Instant::now();
+    let mut avg_speed = 0.0;
 
     while !state.is_complete.load(Ordering::Relaxed) {
         thread::sleep(update_interval);
@@ -98,17 +99,27 @@ fn run_reporter_loop(env: &mut JNIEnv, listener: &JObject, state: &Arc<ScanState
         let time_delta = now.duration_since(last_time).as_secs_f64();
         let bytes_delta = scanned_bytes.saturating_sub(last_bytes);
 
-        let speed_bps = if time_delta > 0.0 {
-            (bytes_delta as f64 / time_delta) as i64
-        } else { 0 };
+        let current_speed = if time_delta > 0.0 {
+            bytes_delta as f64 / time_delta
+        } else {
+            0.0
+        };
+
+        if avg_speed == 0.0 {
+            avg_speed = current_speed;
+        } else {
+            avg_speed = 0.95 * avg_speed + 0.05 * current_speed;
+        }
 
         last_bytes = scanned_bytes;
         last_time = now;
 
         let remaining = target_bytes.saturating_sub(scanned_bytes);
-        let eta_seconds = if speed_bps > 0 {
-            (remaining as f64 / speed_bps as f64) as i64
-        } else { 0 };
+        let eta_seconds = if avg_speed > 1024.0 {
+            (remaining as f64 / avg_speed) as i64
+        } else {
+            0
+        };
 
         let path_display = state.current_path.lock().map(|g| g.clone()).unwrap_or_default();
         let path_jstr = match env.new_string(&path_display) { Ok(s) => s, Err(_) => continue };
@@ -123,7 +134,7 @@ fn run_reporter_loop(env: &mut JNIEnv, listener: &JObject, state: &Arc<ScanState
                 JValue::Long(scanned_bytes as i64),
                 JValue::Long(total_bytes as i64),
                 JValue::Long(target_bytes as i64),
-                JValue::Long(speed_bps),
+                JValue::Long(avg_speed as i64),
                 JValue::Long(eta_seconds),
             ],
         );

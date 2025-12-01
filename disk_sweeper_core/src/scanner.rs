@@ -73,29 +73,47 @@ pub fn scan_root(path_str: &str, state: &Arc<ScanState>) -> ScanResponse {
 }
 
 fn calculate_deep_size(path: &str, state: &Arc<ScanState>) -> u64 {
-    WalkDir::new(path)
+    let mut total_size = 0;
+    let mut batch_size = 0;
+    let mut batch_count = 0;
+
+    for (index, entry) in WalkDir::new(path)
         .follow_links(false)
         .same_file_system(true)
         .into_iter()
-        .map(|entry| {
-            match entry {
-                Ok(e) => {
+        .enumerate()
+    {
+        match entry {
+            Ok(e) => {
+                if index % 1000 == 0 {
                     state.try_update_path(&e.path().to_string_lossy());
 
-                    match e.metadata() {
-                        Ok(m) if m.is_file() => {
-                            let len = m.len();
-                            state.add_file(len);
-                            len
-                        },
-                        _ => 0
+                    if batch_count > 0 {
+                        state.add_batch(batch_size, batch_count);
+                        batch_size = 0;
+                        batch_count = 0;
                     }
-                },
-                Err(error) => {
-                    eprintln!("ACCESS DENIED: {}", error);
-                    0
                 }
+
+                match e.metadata() {
+                    Ok(m) if m.is_file() => {
+                        let len = m.len();
+                        total_size += len;
+                        batch_size += len;
+                        batch_count += 1;
+                    },
+                    _ => {}
+                }
+            },
+            Err(error) => {
+                eprintln!("ACCESS DENIED: {}", error);
             }
-        })
-        .sum()
+        }
+    }
+
+    if batch_count > 0 {
+        state.add_batch(batch_size, batch_count);
+    }
+
+    total_size
 }
