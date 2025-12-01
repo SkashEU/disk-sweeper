@@ -26,6 +26,9 @@ kotlin {
             implementation(libs.kotlinx.serialization.json)
             implementation(compose.materialIconsExtended)
 
+            implementation("io.github.windedge.table:table-m3:0.2.3")
+
+
 
             implementation(libs.forge.viewmodel)
             implementation(libs.forge.event)

@@ -1,19 +1,14 @@
 package com.skash.sweeper.domain.usecase
 
-import com.skash.forge.outcome.Outcome
-import com.skash.forge.usecase.OutcomeUseCase
+import com.skash.forge.usecase.UseCase
 import com.skash.sweeper.domain.FileSystemAnalyzer
-import com.skash.sweeper.domain.model.FileItem
-import kotlinx.coroutines.flow.FlowCollector
+import com.skash.sweeper.domain.ScanResult
+import kotlinx.coroutines.flow.Flow
 
 class GetFileItemsUseCase(
     private val fileSystemAnalyzer: FileSystemAnalyzer
-) : OutcomeUseCase<String, List<FileItem>, String>() {
+) : UseCase<String, ScanResult>() {
 
-    override suspend fun FlowCollector<Outcome<List<FileItem>, String>>.execute(
-        params: String
-    ) {
-        val files = fileSystemAnalyzer.scan(params)
-        emitSuccess(files)
-    }
+    override fun execute(params: String): Flow<ScanResult> = fileSystemAnalyzer.scan(params)
+
 }

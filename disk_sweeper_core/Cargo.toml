@@ -9,6 +9,9 @@ crate-type = ["cdylib"]
 
 [dependencies]
 jni = "0.21"
-jwalk = "0.8"
+rayon = "1.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+fs4 = "0.13.1"
+walkdir = "2.5.0"
+trash = "5.2.5"
