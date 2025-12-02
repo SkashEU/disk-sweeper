@@ -35,6 +35,9 @@ private fun ScannerScreenImpl(
                 onUnmarkPageForDeletion = { page, items ->
                     executeIntent(UnmarkPageForDeletion(page, items))
                 },
+                onDirectoryClick = {
+                    executeIntent(GoToDirectory(it))
+                },
             )
         }
 

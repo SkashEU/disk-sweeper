@@ -7,6 +7,7 @@ import com.skash.forge.navigation.nav2.DefaultNavigationDispatcher
 import com.skash.sweeper.data.repository.FileSystemRepositoryImpl
 import com.skash.sweeper.domain.repository.FileSystemRepository
 import com.skash.sweeper.domain.usecase.GetFileItemsUseCase
+import com.skash.sweeper.domain.usecase.ScanDirectoryUseCase
 import com.skash.sweeper.feature.DirectoryPickerViewModel
 import com.skash.sweeper.feature.launch.LaunchViewModel
 import com.skash.sweeper.feature.scanner.ScannerViewModel
@@ -18,6 +19,8 @@ val diModule = module {
     single<NavigationDispatcher> { DefaultNavigationDispatcher() }
     single<EventBus<UIEvent>> { DefaultEventBus() }
     factory { GetFileItemsUseCase(get()) }
+    factory { ScanDirectoryUseCase(get()) }
+
 
     viewModelOf(::DirectoryPickerViewModel)
     viewModelOf(::LaunchViewModel)

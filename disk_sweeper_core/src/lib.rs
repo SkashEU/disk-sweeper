@@ -1,11 +1,12 @@
 mod models;
 mod scanner;
 
-use crate::models::{ScanUpdate, ScanState, ScanEvent};
+use crate::models::{ScanUpdate, ScanState, ScanEvent, NativeFileSystemEntry, DiskScanner};
 use std::path::Path;
 use std::sync::{atomic::Ordering, Arc};
 use std::time::{Duration, Instant};
 use std::{fs, thread};
+use crate::scanner::scan_root_recursive;
 
 #[uniffi::export(callback_interface)]
 pub trait ScanListener: Send + Sync {
@@ -19,6 +20,53 @@ pub enum FileSystemError {
 }
 
 #[uniffi::export]
+impl DiskScanner {
+
+    #[uniffi::constructor]
+    pub fn new() -> Self {
+        Self {
+            state: Arc::new(ScanState::new()),
+        }
+    }
+    
+    pub fn start_scan(&self, input_path: String, listener: Box<dyn ScanListener>) {
+        self.reset_state();
+
+        let state_clone = self.state.clone();
+        let path_clone = input_path.clone();
+
+        let scanner_handle = thread::spawn(move || {
+            let _guard = CompletionGuard {
+                state: state_clone.clone(),
+            };
+            scan_root_recursive(&path_clone, &state_clone)
+        });
+
+        run_reporter_loop(&listener, &self.state);
+
+        let final_results = scanner_handle.join().unwrap();
+
+        listener.on_event(ScanEvent::Finished {
+            result: final_results
+        });
+    }
+
+    pub fn get_folder_content(&self, path: String) -> Vec<NativeFileSystemEntry> {
+        if let Some(cached_files) = self.state.dir_cache.get(&path) {
+            return cached_files.clone();
+        }
+        Vec::new()
+    }
+
+    fn reset_state(&self) {
+        self.state.scanned_bytes.store(0, Ordering::Relaxed);
+        self.state.scanned_count.store(0, Ordering::Relaxed);
+        self.state.is_complete.store(false, Ordering::Relaxed);
+        self.state.dir_cache.clear();
+    }
+}
+
+#[uniffi::export]
 pub fn scan_directory(input_path: String, listener: Box<dyn ScanListener>) {
     let state = Arc::new(ScanState::new());
 
@@ -29,7 +77,7 @@ pub fn scan_directory(input_path: String, listener: Box<dyn ScanListener>) {
         let _guard = CompletionGuard {
             state: state_clone.clone(),
         };
-        scanner::scan_root(&path_clone, &state_clone)
+        scan_root_recursive(&path_clone, &state_clone)
     });
 
     run_reporter_loop(&listener, &state);
@@ -62,7 +110,7 @@ pub fn delete_path(input_path: String, permanently: bool) -> Result<(), FileSyst
 }
 
 fn run_reporter_loop(listener: &Box<dyn ScanListener>, state: &Arc<ScanState>) {
-    let tick_rate = Duration::from_millis(50); 
+    let tick_rate = Duration::from_millis(50);
     let math_rate = Duration::from_millis(1000);
 
     let mut last_tick = Instant::now();
@@ -98,7 +146,7 @@ fn run_reporter_loop(listener: &Box<dyn ScanListener>, state: &Arc<ScanState>) {
 
             if time_delta > 0.0 {
                 let current_speed = bytes_delta as f64 / time_delta;
-                
+
                 if cached_speed == 0 {
                     cached_speed = current_speed as u64;
                 } else {
@@ -116,7 +164,7 @@ fn run_reporter_loop(listener: &Box<dyn ScanListener>, state: &Arc<ScanState>) {
             last_time_at_calc = now;
             last_math_calc = now;
         }
-        
+
         listener.on_event(ScanEvent::Update {
             update: ScanUpdate {
                 path: cached_path.clone(),

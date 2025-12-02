@@ -27,6 +27,7 @@ import com.skash.sweeper.designsystem.layout.Page
 import com.skash.sweeper.designsystem.layout.Screen
 import com.skash.sweeper.designsystem.theme.Spacing
 import com.skash.sweeper.domain.model.FileSystemEntry
+import com.skash.sweeper.domain.model.StorageType
 import com.skash.sweeper.domain.model.parsePathToSegments
 import com.skash.sweeper.feature.scanner.ScannerState
 import com.skash.sweeper.util.toHumanReadableSize
@@ -40,7 +41,8 @@ internal fun ScanOverViewState(
     state: ScannerState.Scanned,
     onToggleItemDelete: (FileSystemEntry) -> Unit,
     onMarkPageForDeletion: (Int, List<FileSystemEntry>) -> Unit,
-    onUnmarkPageForDeletion: (Int, List<FileSystemEntry>) -> Unit
+    onUnmarkPageForDeletion: (Int, List<FileSystemEntry>) -> Unit,
+    onDirectoryClick: (String) -> Unit
 ) {
     Screen(title = "Scan Overview") {
         Page {
@@ -60,9 +62,12 @@ internal fun ScanOverViewState(
                 }
 
                 FolderTable(
-                    modifier = Modifier.weight(1f), state.path, state.scanResult.files,
+                    modifier = Modifier.weight(1f),
+                    rootPath = state.rootPath,
+                    currentPath = state.currentPath,
+                    items = state.scanResult.files,
                     itemsToDelete = state.itemsToDelete,
-                    onItemClick = { },
+                    onDirectoryClick = onDirectoryClick,
                     onToggleItemDelete = onToggleItemDelete,
                     pagesToDelete = state.pagesToDelete,
                     onMarkPageForDeletion = onMarkPageForDeletion,
@@ -160,7 +165,8 @@ private fun TopLargestFolders(
             Text(text = "Top Largest Folders", style = MaterialTheme.typography.titleMedium)
 
             folders.take(3).forEach { folder ->
-                val usedSpaceByFolder = (folder.allocatedSizeBytes.toDouble() / totalSpace.toDouble()).coerceIn(0.0, 1.0)
+                val usedSpaceByFolder =
+                    (folder.allocatedSizeBytes.toDouble() / totalSpace.toDouble()).coerceIn(0.0, 1.0)
 
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(Spacing.Small),
@@ -172,7 +178,10 @@ private fun TopLargestFolders(
                         Row {
                             Text(text = folder.name, style = MaterialTheme.typography.labelMedium)
                             Spacer(Modifier.weight(1f))
-                            Text(text = folder.allocatedSizeBytes.toHumanReadableSize(), style = MaterialTheme.typography.labelMedium)
+                            Text(
+                                text = folder.allocatedSizeBytes.toHumanReadableSize(),
+                                style = MaterialTheme.typography.labelMedium
+                            )
                         }
 
                         LinearProgressIndicator(
@@ -191,11 +200,12 @@ private fun TopLargestFolders(
 @Composable
 private fun FolderTable(
     modifier: Modifier = Modifier,
-    path: String,
+    rootPath: String,
+    currentPath: String,
     items: List<FileSystemEntry>,
     itemsToDelete: Set<FileSystemEntry>,
     pagesToDelete: Set<Int>,
-    onItemClick: (FileSystemEntry) -> Unit,
+    onDirectoryClick: (String) -> Unit,
     onToggleItemDelete: (FileSystemEntry) -> Unit,
     onMarkPageForDeletion: (Int, List<FileSystemEntry>) -> Unit,
     onUnmarkPageForDeletion: (Int, List<FileSystemEntry>) -> Unit
@@ -214,8 +224,9 @@ private fun FolderTable(
         ) {
 
             BreadcrumbBar(
-                currentPath = path,
-                onPathClick = {}
+                rootPath = rootPath,
+                currentPath = currentPath,
+                onPathClick = onDirectoryClick
             )
         }
 
@@ -252,7 +263,11 @@ private fun FolderTable(
                         )
                     }
                 ) { item ->
-                    row(modifier = Modifier.clickable { onItemClick(item) }) {
+                    row(modifier = if (item.storageType == StorageType.Directory) Modifier.clickable {
+                        onDirectoryClick(
+                            item.path
+                        )
+                    } else Modifier) {
                         cell {
                             Checkbox(
                                 checked = itemsToDelete.contains(item),
@@ -271,11 +286,14 @@ private fun FolderTable(
 
 @Composable
 private fun BreadcrumbBar(
+    rootPath: String,
     currentPath: String,
     onPathClick: (String) -> Unit
 ) {
     val segments = remember(currentPath) { parsePathToSegments(currentPath) }
     val listState = rememberLazyListState()
+
+    val normalizedRoot = remember(rootPath) { rootPath.trimEnd('/', '\\') }
 
     LaunchedEffect(segments.size) {
         if (segments.isNotEmpty()) {
@@ -297,11 +315,21 @@ private fun BreadcrumbBar(
             itemsIndexed(segments) { index, segment ->
                 val isLast = index == segments.lastIndex
 
+                val normalizedSegmentPath = segment.path.trimEnd('/', '\\')
+                val isSafeToClick = normalizedSegmentPath.length >= normalizedRoot.length &&
+                        normalizedSegmentPath.startsWith(normalizedRoot)
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .clip(RoundedCornerShape(4.dp))
-                        .clickable { onPathClick(segment.path) }
+                        .then(
+                            if (isSafeToClick) {
+                                Modifier.clickable { onPathClick(segment.path) }
+                            } else {
+                                Modifier
+                            }
+                        )
                         .padding(horizontal = 4.dp, vertical = 4.dp)
                 ) {
                     if (index == 0) {
