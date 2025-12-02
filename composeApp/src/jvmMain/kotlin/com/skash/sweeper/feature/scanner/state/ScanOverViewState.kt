@@ -332,18 +332,24 @@ private fun BreadcrumbBar(
                         )
                         .padding(horizontal = 4.dp, vertical = 4.dp)
                 ) {
+
+                    val contentColor = when {
+                        isLast -> MaterialTheme.colorScheme.primary
+                        isSafeToClick -> MaterialTheme.colorScheme.onSurface
+                        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                    }
                     if (index == 0) {
                         Icon(
                             imageVector = Icons.Default.Home,
                             contentDescription = "Root",
                             modifier = Modifier.size(16.dp),
-                            tint = if (isLast) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            tint = contentColor
                         )
                     } else {
                         Text(
                             text = segment.name,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = if (isLast) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                            color = contentColor,
                             fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal
                         )
                     }
