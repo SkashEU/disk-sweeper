@@ -2,6 +2,16 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::Instant;
 
+#[derive(uniffi::Enum)]
+pub enum ScanEvent {
+    Update {
+        update: ScanUpdate
+    },
+    Finished {
+        result: ScanResult
+    },
+}
+
 #[derive(uniffi::Record)]
 pub struct NativeFileSystemEntry {
     pub id: u64,

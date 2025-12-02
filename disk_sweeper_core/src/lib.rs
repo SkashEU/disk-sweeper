@@ -1,7 +1,7 @@
 mod models;
 mod scanner;
 
-use crate::models::{ScanUpdate, ScanResult, ScanState};
+use crate::models::{ScanUpdate, ScanState, ScanEvent};
 use std::path::Path;
 use std::sync::{atomic::Ordering, Arc};
 use std::time::Duration;
@@ -16,16 +16,6 @@ pub trait ScanListener: Send + Sync {
 pub enum FileSystemError {
     #[error("File system operation failed: {val}")]
     Generic { val: String },
-}
-
-#[derive(uniffi::Enum)]
-pub enum ScanEvent {
-    Update {
-        update: ScanUpdate
-    },
-    Finished {
-        result: ScanResult
-    },
 }
 
 #[uniffi::export]
