@@ -12,6 +12,7 @@ forge = "0.1.1"
 material3 = "1.10.0-alpha04"
 koinBom = "4.1.1"
 ksp = "2.2.20-2.0.3"
+gobley = "0.3.7"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -50,6 +51,8 @@ composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "k
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
-
+cargo = { id = "dev.gobley.cargo", version.ref = "gobley" }
+uniffi = { id = "dev.gobley.uniffi", version.ref = "gobley" }
+rust = { id = "dev.gobley.rust", version = "0.3.7" }
 sweeper-internal-kmp-module = { id = "sweeper.internal.kmp.module" }
 sweeper-internal-compose-module = { id = "sweeper.internal.compose.module" }

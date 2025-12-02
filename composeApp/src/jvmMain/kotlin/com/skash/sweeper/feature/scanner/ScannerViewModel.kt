@@ -2,7 +2,7 @@ package com.skash.sweeper.feature.scanner
 
 import androidx.lifecycle.viewModelScope
 import com.skash.sweeper.BaseViewModel
-import com.skash.sweeper.domain.ScanResult
+import com.skash.sweeper.domain.model.ScanProgress
 import com.skash.sweeper.domain.usecase.GetFileItemsUseCase
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.onEach
@@ -11,13 +11,13 @@ import kotlinx.coroutines.flow.stateIn
 class ScannerViewModel(
     private val path: String,
     getFileItemsUseCase: GetFileItemsUseCase
-) : BaseViewModel<ScannerState, ScannerState.Intent>(initialState = ScannerState.Scanning()) {
+) : BaseViewModel<ScannerState, ScannerState.Intent>(initialState = ScannerState.Initial) {
 
     private val files = getFileItemsUseCase(path)
-        .onEach {
-            when (it) {
-                is ScanResult.Done -> setState(ScannerState.Scanned(path, it.response))
-                is ScanResult.Update -> setState(ScannerState.Scanning(it))
+        .onEach { scanProgress ->
+            when (scanProgress) {
+                is ScanProgress.Finished -> setState(ScannerState.Scanned(path, scanProgress.result))
+                is ScanProgress.Update -> setState(ScannerState.Scanning(scanProgress.update))
             }
         }
         .stateIn(
@@ -36,6 +36,7 @@ class ScannerViewModel(
         is ScannerState.Scanned.Intent.MarkPageForDeletion -> reduceState<ScannerState.Scanned> {
             copy(itemsToDelete = itemsToDelete + intent.items, pagesToDelete = pagesToDelete + intent.page)
         }
+
         is ScannerState.Scanned.Intent.UnmarkPageForDeletion -> reduceState<ScannerState.Scanned> {
             copy(itemsToDelete = itemsToDelete - intent.items.toSet(), pagesToDelete = pagesToDelete - intent.page)
         }

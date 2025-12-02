@@ -1,29 +1,32 @@
 package com.skash.sweeper.feature.scanner
 
-import com.skash.sweeper.domain.ScanResult
-import com.skash.sweeper.domain.model.FileItem
-import com.skash.sweeper.domain.model.ScanResponse
+import com.skash.sweeper.domain.model.FileSystemEntry
+import com.skash.sweeper.domain.model.ScanResult
+import com.skash.sweeper.domain.model.ScanUpdate
 
 sealed interface ScannerState {
 
     sealed interface Intent
-    //TODO: Move this into a better structure its just poc
+
+    data object Initial : ScannerState
+
     data class Scanning(
-        val state: ScanResult.Update = ScanResult.Update("", 0, 0, 0, 0, 0, 0)
+        val update: ScanUpdate
     ) : ScannerState
 
     data class Scanned(
-        val path: String, val scanResponse: ScanResponse,
-        val itemsToDelete: Set<FileItem> = emptySet(),
+        val path: String,
+        val scanResult: ScanResult,
+        val itemsToDelete: Set<FileSystemEntry> = emptySet(),
         val pagesToDelete: Set<Int> = emptySet()
     ) : ScannerState {
         val sizeOfItemsToDelete get() = itemsToDelete.sumOf { it.sizeBytes }
 
-        sealed interface Intent: ScannerState.Intent {
+        sealed interface Intent : ScannerState.Intent {
             data object DeleteSelected : Intent
-            data class ToggleItemDelete(val item: FileItem) : Intent
-            data class MarkPageForDeletion(val page: Int, val items: List<FileItem>) : Intent
-            data class UnmarkPageForDeletion(val page: Int, val items: List<FileItem>) : Intent
+            data class ToggleItemDelete(val item: FileSystemEntry) : Intent
+            data class MarkPageForDeletion(val page: Int, val items: List<FileSystemEntry>) : Intent
+            data class UnmarkPageForDeletion(val page: Int, val items: List<FileSystemEntry>) : Intent
         }
     }
 }

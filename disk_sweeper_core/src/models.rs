@@ -1,19 +1,19 @@
-use serde::Serialize;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Mutex;
 use std::time::Instant;
 
-#[derive(Serialize)]
-pub struct FileItem {
+#[derive(uniffi::Record)]
+pub struct NativeFileSystemEntry {
+    pub id: u64,
     pub name: String,
     pub path: String,
     pub is_dir: bool,
     pub size_bytes: u64,
+    pub allocated_size_bytes: u64,
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DiskStats {
+#[derive(uniffi::Record)]
+pub struct StorageStats {
     pub drive_total_bytes: u64,
     pub drive_free_bytes: u64,
     pub drive_used_bytes: u64,
@@ -21,11 +21,21 @@ pub struct DiskStats {
     pub scanned_total_bytes: u64,
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ScanResponse {
-    pub stats: DiskStats,
-    pub files: Vec<FileItem>,
+#[derive(uniffi::Record)]
+pub struct ScanResult {
+    pub stats: StorageStats,
+    pub files: Vec<NativeFileSystemEntry>,
+}
+
+#[derive(uniffi::Record)]
+pub struct ScanUpdate {
+    pub path: String,
+    pub scanned_count: u64,
+    pub scanned_bytes: u64,
+    pub total_bytes: u64,
+    pub target_bytes: u64,
+    pub avg_speed: u64,
+    pub eta_seconds: i64,
 }
 
 pub struct ScanState {

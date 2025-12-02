@@ -1,13 +1,14 @@
-use crate::models::{DiskStats, FileItem, ScanResponse, ScanState};
+use crate::models::{StorageStats, NativeFileSystemEntry, ScanResult, ScanState};
 use rayon::prelude::*;
 use std::fs;
+use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use walkdir::WalkDir;
 
-pub fn scan_root(path_str: &str, state: &Arc<ScanState>) -> ScanResponse {
+pub fn scan_root(path_str: &str, state: &Arc<ScanState>) -> ScanResult {
     let path = Path::new(path_str);
 
     if let Ok(total) = fs4::total_space(path) {
@@ -23,18 +24,24 @@ pub fn scan_root(path_str: &str, state: &Arc<ScanState>) -> ScanResponse {
     let entries = match fs::read_dir(path) {
         Ok(e) => e.collect::<Vec<_>>(),
         Err(e) => {
-            eprintln!("RUST ERROR: Cannot read root directory '{}': {}", path_str, e);
-            return ScanResponse {
-                stats: DiskStats {
-                    drive_total_bytes: 0, drive_free_bytes: 0, drive_used_bytes: 0,
-                    scanned_file_count: 0, scanned_total_bytes: 0
+            eprintln!(
+                "RUST ERROR: Cannot read root directory '{}': {}",
+                path_str, e
+            );
+            return ScanResult {
+                stats: StorageStats {
+                    drive_total_bytes: 0,
+                    drive_free_bytes: 0,
+                    drive_used_bytes: 0,
+                    scanned_file_count: 0,
+                    scanned_total_bytes: 0,
                 },
-                files: Vec::new()
+                files: Vec::new(),
             };
         }
     };
 
-    let mut results: Vec<FileItem> = entries
+    let mut results: Vec<NativeFileSystemEntry> = entries
         .into_par_iter()
         .filter_map(|entry| {
             let entry = entry.ok()?;
@@ -43,15 +50,38 @@ pub fn scan_root(path_str: &str, state: &Arc<ScanState>) -> ScanResponse {
             let name = entry.file_name().to_string_lossy().to_string();
             let is_dir = meta.is_dir();
 
-            let size = if is_dir {
+            #[cfg(unix)]
+            let id = meta.ino();
+
+            #[cfg(not(unix))]
+            let id = {
+                let mut hasher = DefaultHasher::new();
+                full_path.hash(&mut hasher);
+                hasher.finish()
+            };
+
+            let (size, allocated_size) = if is_dir {
                 calculate_deep_size(&full_path, state)
             } else {
                 let s = meta.len();
                 state.add_file(s);
-                s
+
+                #[cfg(unix)]
+                let a = meta.blocks() * 512;
+                #[cfg(not(unix))]
+                let a = s;
+
+                (s, a)
             };
 
-            Some(FileItem { name, path: full_path, is_dir, size_bytes: size })
+            Some(NativeFileSystemEntry {
+                id,
+                name,
+                path: full_path,
+                is_dir,
+                size_bytes: size,
+                allocated_size_bytes: allocated_size,
+            })
         })
         .collect();
 
@@ -60,20 +90,21 @@ pub fn scan_root(path_str: &str, state: &Arc<ScanState>) -> ScanResponse {
     let free_space = fs4::available_space(path).unwrap_or(0);
     let used_space = total_space.saturating_sub(free_space);
 
-    ScanResponse {
-        stats: DiskStats {
+    ScanResult {
+        stats: StorageStats {
             drive_total_bytes: total_space,
             drive_free_bytes: free_space,
             drive_used_bytes: used_space,
             scanned_file_count: state.scanned_count.load(Ordering::Relaxed),
             scanned_total_bytes: state.scanned_bytes.load(Ordering::Relaxed),
         },
-        files: results
+        files: results,
     }
 }
 
-fn calculate_deep_size(path: &str, state: &Arc<ScanState>) -> u64 {
+fn calculate_deep_size(path: &str, state: &Arc<ScanState>) -> (u64, u64) {
     let mut total_size = 0;
+    let mut total_allocated = 0;
     let mut batch_size = 0;
     let mut batch_count = 0;
 
@@ -99,12 +130,22 @@ fn calculate_deep_size(path: &str, state: &Arc<ScanState>) -> u64 {
                     Ok(m) if m.is_file() => {
                         let len = m.len();
                         total_size += len;
+
+                        #[cfg(unix)]
+                        {
+                            total_allocated += m.blocks() * 512;
+                        }
+                        #[cfg(not(unix))]
+                        {
+                            total_allocated += len;
+                        }
+
                         batch_size += len;
                         batch_count += 1;
-                    },
+                    }
                     _ => {}
                 }
-            },
+            }
             Err(error) => {
                 eprintln!("ACCESS DENIED: {}", error);
             }
@@ -115,5 +156,5 @@ fn calculate_deep_size(path: &str, state: &Arc<ScanState>) -> u64 {
         state.add_batch(batch_size, batch_count);
     }
 
-    total_size
+    (total_size, total_allocated)
 }

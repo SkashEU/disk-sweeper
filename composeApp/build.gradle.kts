@@ -1,6 +1,4 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
-import org.gradle.api.tasks.Exec
-import org.gradle.api.tasks.Copy
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -8,6 +6,7 @@ plugins {
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.composeHotReload)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.rust)
 }
 
 kotlin {
@@ -27,7 +26,6 @@ kotlin {
             implementation(compose.materialIconsExtended)
 
             implementation("io.github.windedge.table:table-m3:0.2.3")
-
 
 
             implementation(libs.forge.viewmodel)

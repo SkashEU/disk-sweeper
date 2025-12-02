@@ -26,21 +26,21 @@ import androidx.compose.ui.unit.dp
 import com.skash.sweeper.designsystem.layout.Page
 import com.skash.sweeper.designsystem.layout.Screen
 import com.skash.sweeper.designsystem.theme.Spacing
-import com.skash.sweeper.domain.model.FileItem
+import com.skash.sweeper.domain.model.FileSystemEntry
 import com.skash.sweeper.domain.model.parsePathToSegments
 import com.skash.sweeper.feature.scanner.ScannerState
-import com.skash.sweeper.feature.scanner.formatSize
+import com.skash.sweeper.util.toHumanReadableSize
 import io.github.windedge.table.PaginationState
 import io.github.windedge.table.m3.PaginatedDataTable
 import io.github.windedge.table.m3.Paginator
 import io.github.windedge.table.rememberPaginationState
 
 @Composable
-fun ScanOverViewState(
+internal fun ScanOverViewState(
     state: ScannerState.Scanned,
-    onToggleItemDelete: (FileItem) -> Unit,
-    onMarkPageForDeletion: (Int, List<FileItem>) -> Unit,
-    onUnmarkPageForDeletion: (Int, List<FileItem>) -> Unit
+    onToggleItemDelete: (FileSystemEntry) -> Unit,
+    onMarkPageForDeletion: (Int, List<FileSystemEntry>) -> Unit,
+    onUnmarkPageForDeletion: (Int, List<FileSystemEntry>) -> Unit
 ) {
     Screen(title = "Scan Overview") {
         Page {
@@ -49,18 +49,18 @@ fun ScanOverViewState(
                 Column(Modifier.fillMaxWidth(0.3f), verticalArrangement = Arrangement.spacedBy(Spacing.Medium)) {
                     DiskUsage(
                         modifier = Modifier.weight(1f),
-                        usedSpace = state.scanResponse.stats.driveUsedBytes,
-                        freeSpace = state.scanResponse.stats.driveFreeBytes
+                        usedSpace = state.scanResult.stats.usedBytes,
+                        freeSpace = state.scanResult.stats.freeBytes
                     )
                     TopLargestFolders(
                         modifier = Modifier.weight(1f),
-                        folders = state.scanResponse.files,
-                        totalSpace = state.scanResponse.stats.driveTotalBytes,
+                        folders = state.scanResult.files,
+                        totalSpace = state.scanResult.stats.totalBytes,
                     )
                 }
 
                 FolderTable(
-                    modifier = Modifier.weight(1f), state.path, state.scanResponse.files,
+                    modifier = Modifier.weight(1f), state.path, state.scanResult.files,
                     itemsToDelete = state.itemsToDelete,
                     onItemClick = { },
                     onToggleItemDelete = onToggleItemDelete,
@@ -118,7 +118,7 @@ private fun DiskUsage(
                 Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
                 Text(text = "Used", style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.weight(1f))
-                Text(text = formatSize(usedSpace), style = MaterialTheme.typography.bodyMedium)
+                Text(text = usedSpace.toHumanReadableSize(), style = MaterialTheme.typography.bodyMedium)
             }
 
             Row(
@@ -132,7 +132,7 @@ private fun DiskUsage(
                 )
                 Text(text = "Free", style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.weight(1f))
-                Text(text = formatSize(freeSpace), style = MaterialTheme.typography.bodyMedium)
+                Text(text = freeSpace.toHumanReadableSize(), style = MaterialTheme.typography.bodyMedium)
 
             }
 
@@ -146,7 +146,7 @@ private fun DiskUsage(
 @Composable
 private fun TopLargestFolders(
     modifier: Modifier = Modifier,
-    folders: List<FileItem>,
+    folders: List<FileSystemEntry>,
     totalSpace: Long,
 ) {
 
@@ -160,7 +160,7 @@ private fun TopLargestFolders(
             Text(text = "Top Largest Folders", style = MaterialTheme.typography.titleMedium)
 
             folders.take(3).forEach { folder ->
-                val usedSpaceByFolder = (folder.sizeBytes.toDouble() / totalSpace.toDouble()).coerceIn(0.0, 1.0)
+                val usedSpaceByFolder = (folder.allocatedSizeBytes.toDouble() / totalSpace.toDouble()).coerceIn(0.0, 1.0)
 
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(Spacing.Small),
@@ -172,7 +172,7 @@ private fun TopLargestFolders(
                         Row {
                             Text(text = folder.name, style = MaterialTheme.typography.labelMedium)
                             Spacer(Modifier.weight(1f))
-                            Text(text = formatSize(folder.sizeBytes), style = MaterialTheme.typography.labelMedium)
+                            Text(text = folder.sizeBytes.toHumanReadableSize(), style = MaterialTheme.typography.labelMedium)
                         }
 
                         LinearProgressIndicator(
@@ -192,13 +192,13 @@ private fun TopLargestFolders(
 private fun FolderTable(
     modifier: Modifier = Modifier,
     path: String,
-    items: List<FileItem>,
-    itemsToDelete: Set<FileItem>,
+    items: List<FileSystemEntry>,
+    itemsToDelete: Set<FileSystemEntry>,
     pagesToDelete: Set<Int>,
-    onItemClick: (FileItem) -> Unit,
-    onToggleItemDelete: (FileItem) -> Unit,
-    onMarkPageForDeletion: (Int, List<FileItem>) -> Unit,
-    onUnmarkPageForDeletion: (Int, List<FileItem>) -> Unit
+    onItemClick: (FileSystemEntry) -> Unit,
+    onToggleItemDelete: (FileSystemEntry) -> Unit,
+    onMarkPageForDeletion: (Int, List<FileSystemEntry>) -> Unit,
+    onUnmarkPageForDeletion: (Int, List<FileSystemEntry>) -> Unit
 ) {
 
     val paginationState = rememberPaginationState(items.size, pageSize = 10)
@@ -246,7 +246,7 @@ private fun FolderTable(
                     footer = {
                         TableFooter(
                             selectedCount = itemsToDelete.count(),
-                            selectedSize = formatSize(itemsToDelete.sumOf { it.sizeBytes }),
+                            selectedSize = itemsToDelete.sumOf { it.sizeBytes }.toHumanReadableSize(),
                             paginationState = paginationState,
                             onDelete = { },
                         )
@@ -260,7 +260,7 @@ private fun FolderTable(
                             )
                         }
                         cell { Text(text = item.name) }
-                        cell { Text(text = formatSize(item.sizeBytes)) }
+                        cell { Text(text = item.allocatedSizeBytes.toHumanReadableSize()) }
                         cell { Text(text = "TODO") }
                     }
                 }

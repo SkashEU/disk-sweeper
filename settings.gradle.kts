@@ -59,6 +59,6 @@ plugins {
 }
 
 include(":composeApp")
-include("domain")
-include("designsystem")
-include("data")
+include(":domain")
+include(":designsystem")
+include(":data")
