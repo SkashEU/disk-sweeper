@@ -172,7 +172,7 @@ private fun TopLargestFolders(
                         Row {
                             Text(text = folder.name, style = MaterialTheme.typography.labelMedium)
                             Spacer(Modifier.weight(1f))
-                            Text(text = folder.sizeBytes.toHumanReadableSize(), style = MaterialTheme.typography.labelMedium)
+                            Text(text = folder.allocatedSizeBytes.toHumanReadableSize(), style = MaterialTheme.typography.labelMedium)
                         }
 
                         LinearProgressIndicator(

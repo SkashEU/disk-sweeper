@@ -4,7 +4,7 @@ mod scanner;
 use crate::models::{ScanUpdate, ScanState, ScanEvent};
 use std::path::Path;
 use std::sync::{atomic::Ordering, Arc};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{fs, thread};
 
 #[uniffi::export(callback_interface)]
@@ -26,9 +26,10 @@ pub fn scan_directory(input_path: String, listener: Box<dyn ScanListener>) {
     let path_clone = input_path.clone();
 
     let scanner_handle = thread::spawn(move || {
-        let results = scanner::scan_root(&path_clone, &state_clone);
-        state_clone.is_complete.store(true, Ordering::SeqCst);
-        results
+        let _guard = CompletionGuard {
+            state: state_clone.clone(),
+        };
+        scanner::scan_root(&path_clone, &state_clone)
     });
 
     run_reporter_loop(&listener, &state);
@@ -61,59 +62,82 @@ pub fn delete_path(input_path: String, permanently: bool) -> Result<(), FileSyst
 }
 
 fn run_reporter_loop(listener: &Box<dyn ScanListener>, state: &Arc<ScanState>) {
-    let update_interval = Duration::from_millis(50);
+    let tick_rate = Duration::from_millis(50); 
+    let math_rate = Duration::from_millis(1000);
 
-    let mut last_bytes = 0u64;
-    let mut last_time = std::time::Instant::now();
-    let mut avg_speed = 0.0;
+    let mut last_tick = Instant::now();
+    let mut last_math_calc = Instant::now();
+
+    let mut last_bytes_at_calc = 0u64;
+    let mut last_time_at_calc = Instant::now();
+
+    let mut cached_speed: u64 = 0;
+    let mut cached_eta: i64 = 0;
+    let mut cached_path = String::new();
 
     while !state.is_complete.load(Ordering::Relaxed) {
-        thread::sleep(update_interval);
+        let elapsed = last_tick.elapsed();
+        if elapsed < tick_rate {
+            thread::sleep(tick_rate - elapsed);
+        }
+        last_tick = Instant::now();
 
         let scanned_count = state.scanned_count.load(Ordering::Relaxed);
         let scanned_bytes = state.scanned_bytes.load(Ordering::Relaxed);
         let target_bytes = state.target_bytes.load(Ordering::Relaxed);
         let total_bytes = state.drive_capacity.load(Ordering::Relaxed);
 
-        let now = std::time::Instant::now();
-        let time_delta = now.duration_since(last_time).as_secs_f64();
-        let bytes_delta = scanned_bytes.saturating_sub(last_bytes);
-
-        let current_speed = if time_delta > 0.0 {
-            bytes_delta as f64 / time_delta
-        } else {
-            0.0
-        };
-
-        if avg_speed == 0.0 {
-            avg_speed = current_speed;
-        } else {
-            avg_speed = 0.95 * avg_speed + 0.05 * current_speed;
+        if let Ok(guard) = state.current_path.try_lock() {
+            cached_path = guard.clone();
         }
 
-        last_bytes = scanned_bytes;
-        last_time = now;
+        if last_math_calc.elapsed() >= math_rate {
+            let now = Instant::now();
+            let time_delta = now.duration_since(last_time_at_calc).as_secs_f64();
+            let bytes_delta = scanned_bytes.saturating_sub(last_bytes_at_calc);
 
-        let remaining = target_bytes.saturating_sub(scanned_bytes);
-        let eta_seconds = if avg_speed > 1024.0 {
-            (remaining as f64 / avg_speed) as i64
-        } else {
-            0
-        };
+            if time_delta > 0.0 {
+                let current_speed = bytes_delta as f64 / time_delta;
+                
+                if cached_speed == 0 {
+                    cached_speed = current_speed as u64;
+                } else {
+                    cached_speed = ((cached_speed as f64 * 0.5) + (current_speed * 0.5)) as u64;
+                }
 
-        let path_display = state.current_path.lock().map(|g| g.clone()).unwrap_or_default();
-
+                let remaining = target_bytes.saturating_sub(scanned_bytes);
+                if cached_speed > 1024 {
+                    cached_eta = (remaining as f64 / cached_speed as f64) as i64;
+                } else {
+                    cached_eta = 0;
+                }
+            }
+            last_bytes_at_calc = scanned_bytes;
+            last_time_at_calc = now;
+            last_math_calc = now;
+        }
+        
         listener.on_event(ScanEvent::Update {
             update: ScanUpdate {
-                path: path_display,
+                path: cached_path.clone(),
                 scanned_count,
                 scanned_bytes,
                 total_bytes,
                 target_bytes,
-                avg_speed: avg_speed as u64,
-                eta_seconds,
+                avg_speed: cached_speed,
+                eta_seconds: cached_eta,
             },
         });
+    }
+}
+
+struct CompletionGuard {
+    state: Arc<ScanState>,
+}
+
+impl Drop for CompletionGuard {
+    fn drop(&mut self) {
+        self.state.is_complete.store(true, Ordering::SeqCst);
     }
 }
 

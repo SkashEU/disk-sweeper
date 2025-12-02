@@ -82,7 +82,7 @@ impl ScanState {
         self.scanned_bytes.fetch_add(size, Ordering::Relaxed);
         self.scanned_count.fetch_add(count, Ordering::Relaxed);
     }
-
+    
     pub fn try_update_path(&self, path: &str) {
         if let Ok(mut guard) = self.current_path.try_lock() {
             *guard = path.to_string();

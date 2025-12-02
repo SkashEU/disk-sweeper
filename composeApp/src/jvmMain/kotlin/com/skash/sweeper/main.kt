@@ -13,6 +13,5 @@ fun main() = application {
         state = rememberWindowState(width = 1300.dp, height = 900.dp)
     ) {
         App()
-
     }
 }
